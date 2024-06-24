@@ -114,9 +114,9 @@ module.exports = function (app) {
           if (threadToDelete.delete_password === delete_password) {
             boardData.threads.pull(thread_id);
             await boardData.save();
-            res.send("Success");
+            res.send("success");
           } else {
-            res.send("Incorrect Password");
+            res.send("incorrect password");
           }
         }
       } catch (err) {
@@ -189,7 +189,7 @@ module.exports = function (app) {
         }
       } catch (err) {
         console.log(err);
-        res.json({ error: "There was an error reporting the reply" });
+        res.json({ error: "There was an error reporting the reply" }); //Aquí
       }
     })
     .delete(async (req, res) => {
@@ -208,9 +208,9 @@ module.exports = function (app) {
           if (reply.delete_password === delete_password) {
             thread.replies.pull(reply_id);
             await data.save();
-            res.send("Success");
+            res.send("success");
           } else {
-            res.send("Incorrect Password");
+            res.send("incorrect password");
           }
         }
       } catch (err) {
