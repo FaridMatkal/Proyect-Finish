@@ -88,14 +88,15 @@ module.exports = function (app) {
         const boardData = await BoardModel.findOne({ name: board });
         if (!boardData) {
           res.json({ error: "Board not found" });
-        } else {
-          const date = new Date();
-          let reportedThread = boardData.threads.id(report_id);
-          reportedThread.reported = true;
-          reportedThread.bumped_on = date;
-          await boardData.save();
-          res.send("Success");
+        } 
+        const threadToReport = boardData.threads.id(report_id);
+        if (!threadToReport) {
+          return res.json({ error: "Thread not found" });
         }
+
+        threadToReport.reported = true;
+        await boardData.save();
+        res.send("reported");
       } catch (err) {
         console.log(err);
         res.json({ error: "There was an error reporting the thread" });
@@ -174,23 +175,28 @@ module.exports = function (app) {
       const { thread_id, reply_id } = req.body;
       const board = req.params.board;
       try {
-        const data = await BoardModel.findOne({ name: board });
-        if (!data) {
-          console.log("No board with this name");
-          res.json({ error: "No board with this name" });
-        } else {
-          console.log("data", data);
-          let thread = data.threads.id(thread_id);
-          let reply = thread.replies.id(reply_id);
-          reply.reported = true;
-          reply.bumped_on = new Date();
-          await data.save();
-          res.send("Success");
-        }
-      } catch (err) {
-        console.log(err);
-        res.json({ error: "There was an error reporting the reply" }); //Aquí
+      const boardData = await BoardModel.findOne({ name: board });
+      if (!boardData) {
+        return res.json({ error: "Board not found" });
       }
+
+      const thread = boardData.threads.id(thread_id);
+      if (!thread) {
+        return res.json({ error: "Thread not found" });
+      }
+
+      const replyToReport = thread.replies.id(reply_id);
+      if (!replyToReport) {
+        return res.json({ error: "Reply not found" });
+      }
+
+      replyToReport.reported = true;
+      await boardData.save();
+      res.send("reported");
+    } catch (err) {
+      console.log(err);
+      res.json({ error: "There was an error reporting the reply" });
+    }
     })
     .delete(async (req, res) => {
       const { thread_id, reply_id, delete_password } = req.body;
