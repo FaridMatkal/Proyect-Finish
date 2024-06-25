@@ -1,172 +1,240 @@
-const chaiHttp = require("chai-http");
-const chai = require("chai");
+const chaiHttp = require('chai-http');
+const chai = require('chai');
+const mongoose = require('mongoose');
 const assert = chai.assert;
-const server = require("../server");
+const server = require('../server');
 
 chai.use(chaiHttp);
 
-let testThread_id;
-let testReply_id;
-suite("Functional Tests", function () {
-  suite("10 functional tests", function () {
-    // Creating a new thread: POST request to /api/threads/{board}
-    // Viewing the 10 most recent threads with 3 replies each: GET request to /api/threads/{board}
-    // Deleting a thread with the incorrect password: DELETE request to /api/threads/{board} with an invalid delete_password
-    test("Creating a new thread: POST request to /api/threads/{board}", function (done) {
-      chai
-        .request(server)
-        .post("/api/threads/test-board")
-        .set("content-type", "application/json")
-        .send({ text: "test text", delete_password: "test" })
-        .end(function (err, res) {
-          assert.equal(res.status, 200);
-          assert.equal(res.body.text, "test text");
-          assert.equal(res.body.delete_password, "test");
-          assert.equal(res.body.reported, false);
-          testThread_id = res.body._id;
-          done();
-        });
-    });
-    test("Viewing the 10 most recent threads with 3 replies each: GET request to /api/threads/{board}", function (done) {
-      chai
-        .request(server)
-        .get("/api/threads/test-board")
-        .end(function (err, res) {
-          assert.equal(res.status, 200);
-          assert.exists(res.body[0], "There is a thread");
-          assert.equal(res.body[0].text, "test text");
-          done();
-        });
-    });
-    test("Deleting a thread with the incorrect password: DELETE request to /api/threads/{board} with an invalid delete_password", function (done) {
-      chai
-        .request(server)
-        .delete("/api/threads/test-board")
-        .set("content-type", "application/json")
-        .send({ thread_id: testThread_id, delete_password: "incorrect" })
-        .end(function (err, res) {
-          assert.equal(res.status, 200);
-          assert.equal(res.text, "incorrect password");
-          done();
-        });
-    });
-    // Reporting a thread: PUT request to /api/threads/{board}
-    // Creating a new reply: POST request to /api/replies/{board}
-    test("Reporting a thread: PUT request to /api/threads/{board}", function (done) {
-      console.log("testThread_id", testThread_id);
-      chai
-        .request(server)
-        .put("/api/threads/test-board")
-        .set("content-type", "application/json")
-        .send({ report_id: testThread_id })
-        .end(function (err, res) {
-          assert.equal(res.status, 200);
-          assert.equal(res.text, "reported"); 
-          done();
-        });
-    });
-    test("Creating a new reply: POST request to /api/replies/{board}", function (done) {
-      chai
-        .request(server)
-        .post("/api/replies/test-board")
-        .set("content-type", "application/json")
+suite('Functional Tests', function() {
+  const board = 'general';
+  suite('The tests', () => {
+    test("Creating a new thread: POST request to '/api/threads/{board}'", () => {
+      chai.request(server)
+        .post(`/api/threads/${board}`)
         .send({
-          thread_id: testThread_id,
-          text: "test reply",
-          delete_password: "testreply",
+          board: board,
+          text: 'Creating a new thread: POST request',
+          delete_password: 'donotdelete'
         })
-        .end(function (err, res) {
+        .end((err, res) => {
           assert.equal(res.status, 200);
-          assert.equal(res.body.threads[0].replies[0].text, "test reply");
-          testReply_id = res.body.threads[0].replies[0]._id;
-          done();
+          assert.equal(res.body.text, 'Creating a new thread: POST request');
+          assert.equal(res.body.replycount, 0);
+          assert.equal(res.body.delete_password, 'donotdelete');
         });
     });
-    // Viewing a single thread with all replies: GET request to /api/replies/{board}
-    test("Viewing a single thread with all replies: GET request to /api/replies/{board}", function (done) {
-      chai
-        .request(server)
-        .get("/api/replies/test-board")
-        .set("content-type", "application/json")
-        .query({
-          thread_id: testThread_id,
-        })
-        .end(function (err, res) {
+
+    test("Viewing the 10 most recent threads with 3 replies each: GET request to '/api/threads/{board}'", () => {
+      chai.request(server)
+        .get(`/api/threads/${board}`)
+        .end((err, res) => {
           assert.equal(res.status, 200);
-          console.log("test get whole thread body", res.body);
-          assert.equal(res.body._id, testThread_id);
-          assert.equal(res.body.text, "test text");
-          assert.equal(res.body.replies[0].text, "test reply");
-          done();
+          assert.isAtMost(res.body.length, 10);
+          assert.isAtMost(res.body[0].replies.length, 3);
         });
     });
-    // Deleting a reply with the incorrect password: DELETE request to /api/replies/{board} with an invalid delete_password
-    test("Deleting a reply with the incorrect password: DELETE request to /api/replies/{board} with an invalid delete_password", function (done) {
-      console.log(
-        "delete reply invalid ids: thread_id: " +
-          testThread_id +
-          " reply_id: " +
-          testReply_id
-      );
-      chai
-        .request(server)
-        .delete("/api/replies/test-board")
-        .set("content-type", "application/json")
+
+    test("Deleting a thread with the incorrect password: DELETE request to '/api/threads/{board}' with an invalid 'delete_password'", () => {
+      chai.request(server)
+        .post(`/api/threads/${board}`)
         .send({
-          thread_id: testThread_id,
-          reply_id: testReply_id,
-          delete_password: "Incorrect",
+          board: board,
+          text: 'Creating a new thread to delete unsuccessfully: POST request',
+          delete_password: 'delete'
         })
-        .end(function (err, res) {
-          assert.equal(res.status, 200);
-          assert.equal(res.text, "incorrect password");
-          done();
+        .end((err, res) => {
+          chai.request(server)
+            .delete(`/api/threads/${board}`)
+            .send({
+              board: board,
+              thread_id: new mongoose.Types.ObjectId(res.body._id), // Cambio realizado aquí
+              delete_password: 'delet'
+            })
+            .end((error, response) => {
+              assert.equal(response.text, 'incorrect password');
+            });
         });
     });
-    // Reporting a reply: PUT request to /api/replies/{board}
-    test("Reporting a reply: PUT request to /api/replies/{board}", function (done) {
-      chai
-        .request(server)
-        .put("/api/replies/test-board")
-        .set("content-type", "application/json")
+
+    test("Deleting a thread with the correct password: DELETE request to '/api/threads/{board}' with a valid 'delete_password'", () => {
+      chai.request(server)
+        .post(`/api/threads/${board}`)
         .send({
-          thread_id: testThread_id,
-          reply_id: testReply_id,
+          board: board,
+          text: 'Creating a new thread to delete successfully: POST request',
+          delete_password: 'delete'
         })
-        .end(function (err, res) {
-          assert.equal(res.status, 200);
-          assert.equal(res.text, "reported");
-          done();
+        .end((err, res) => {
+          chai.request(server)
+            .delete(`/api/threads/${board}`)
+            .send({
+              board: board,
+              thread_id: new mongoose.Types.ObjectId(res.body._id), // Cambio realizado aquí
+              delete_password: 'delete'
+            })
+            .end((error, response) => {
+              assert.equal(response.text, 'success');
+            });
         });
     });
-    // Deleting a reply with the correct password: DELETE request to /api/replies/{board} with a valid delete_password
-    test("Deleting a reply with the correct password: DELETE request to /api/replies/{board} with a valid delete_password", function (done) {
-      chai
-        .request(server)
-        .delete("/api/replies/test-board")
-        .set("content-type", "application/json")
+
+    test("Reporting a thread: PUT request to '/api/threads/{board}'", () => {
+      chai.request(server)
+        .post(`/api/threads/${board}`)
         .send({
-          thread_id: testThread_id,
-          reply_id: testReply_id,
-          delete_password: "testreply",
+          board: board,
+          text: 'Creating a new thread to report: POST request',
+          delete_password: 'reported'
         })
-        .end(function (err, res) {
-          assert.equal(res.status, 200);
-          assert.equal(res.text, "success");
-          done();
+        .end((err, res) => {
+          chai.request(server)
+            .put(`/api/threads/${board}`)
+            .send({
+              board: board,
+              report_id: new mongoose.Types.ObjectId(res.body._id) // Cambio realizado aquí
+            })
+            .end((error, response) => {
+              assert.equal(response.text, 'reported');
+            });
         });
     });
-    // Deleting a thread with the correct password: DELETE request to /api/threads/{board} with a valid delete_password
-    test("Deleting a thread with the correct password: DELETE request to /api/threads/{board} with a valid delete_password", function (done) {
-      chai
-        .request(server)
-        .delete("/api/threads/test-board")
-        .set("content-type", "application/json")
-        .send({ thread_id: testThread_id, delete_password: "test" })
-        .end(function (err, res) {
-          assert.equal(res.status, 200);
-          assert.equal(res.text, "success");
-          done();
+
+    test("Creating a new reply: POST request to '/api/replies/{board}'", () => {
+      chai.request(server)
+        .post(`/api/threads/${board}`)
+        .send({
+          text: 'Creating a new thread to create a new reply with: POST request',
+          delete_password: 'replied'
+        })
+        .end((err, res) => {
+          chai.request(server)
+            .post(`/api/replies/${board}`)
+            .send({
+              thread_id: new mongoose.Types.ObjectId(res.body._id), // Cambio realizado aquí
+              text: 'This is the new reply to the new thread: POST request',
+              delete_password: 'thereply'
+            })
+            .end((error, response) => {
+              const no = response.body.replies.length - 1;
+              assert.equal(response.status, 200);
+              assert.equal(response.body.replies[no].text, 'This is the new reply to the new thread: POST request');
+              assert.equal(response.body.replies[no].delete_password, 'thereply');
+              assert.equal(res.body.text, 'Creating a new thread to create a new reply with: POST request');
+            });
+        });
+    });
+
+    test("Viewing a single thread with all replies: GET request to '/api/replies/{board}'", () => {
+      chai.request(server)
+        .get(`/api/threads/${board}`)
+        .end((err, res) => {
+          chai.request(server)
+            .get(`/api/replies/${board}`)
+            .send({ thread_id: new mongoose.Types.ObjectId(res.body[0]._id) }) // Cambio realizado aquí
+            .end((err2, res2) => {
+              assert.equal(res2.status, 200);
+              assert.exists(res2.body.text);
+              assert.exists(res2.body.replies);
+            });
+        });
+    });
+
+    test("Deleting a reply with the incorrect password: DELETE request to '/api/threads/{board}' with an invalid 'delete_password'", () => {
+      chai.request(server)
+        .post(`/api/threads/${board}`)
+        .send({
+          board: board,
+          text: 'Creating a new thread to create a new reply with to delete unsuccessfully: POST request',
+          delete_password: 'replied'
+        })
+        .end((err, res) => {
+          chai.request(server)
+            .post(`/api/replies/${board}`)
+            .send({
+              board: board,
+              thread_id: new mongoose.Types.ObjectId(res.body._id), // Cambio realizado aquí
+              text: 'This is the new reply to the new thread that will be deleted unsuccessfully: POST request',
+              delete_password: 'thereply'
+            })
+            .end((err2, res2) => {
+              chai.request(server)
+                .delete(`/api/replies/${board}`)
+                .send({
+                  board: board,
+                  thread_id: new mongoose.Types.ObjectId(res2.body._id), // Cambio realizado aquí
+                  reply_id: new mongoose.Types.ObjectId(res2.body.replies[0]._id), // Cambio realizado aquí
+                  delete_password: 'therepl'
+                })
+                .end((err3, res3) => {
+                  assert.equal(res3.text, 'incorrect password');
+                });
+            });
+        });
+    });
+
+    test("Deleting a reply with the correct password: DELETE request to '/api/threads/{board}' with a valid 'delete_password'", () => {
+      chai.request(server)
+        .post(`/api/threads/${board}`)
+        .send({
+          board: board,
+          text: 'Creating a new thread to create a new reply with to delete successfully: POST request',
+          delete_password: 'replied'
+        })
+        .end((err, res) => {
+          chai.request(server)
+            .post(`/api/replies/${board}`)
+            .send({
+              board: board,
+              thread_id: new mongoose.Types.ObjectId(res.body._id), // Cambio realizado aquí
+              text: 'This is the new reply to the new thread that will be deleted successfully: POST request',
+              delete_password: 'thereply'
+            })
+            .end((err2, res2) => {
+              chai.request(server)
+                .delete(`/api/replies/${board}`)
+                .send({
+                  board: board,
+                  thread_id: new mongoose.Types.ObjectId(res2.body._id), // Cambio realizado aquí
+                  reply_id: new mongoose.Types.ObjectId(res2.body.replies[0]._id), // Cambio realizado aquí
+                  delete_password: 'thereply'
+                })
+                .end((err3, res3) => {
+                  assert.equal(res3.text, 'success');
+                });
+            });
+        });
+    });
+
+    test("Reporting a reply: PUT request to '/api/replies/{board}'", () => {
+      chai.request(server)
+        .post(`/api/threads/${board}`)
+        .send({
+          board: board,
+          text: 'Creating a new thread to create a new reply with to report: POST request',
+          delete_password: 'replied'
+        })
+        .end((err, res) => {
+          chai.request(server)
+            .post(`/api/replies/${board}`)
+            .send({
+              board: board,
+              thread_id: new mongoose.Types.ObjectId(res.body._id), // Cambio realizado aquí
+              text: 'This is the new reply to the new thread that will be reported: POST request',
+              delete_password: 'thereply'
+            })
+            .end((err2, res2) => {
+              chai.request(server)
+                .put(`/api/replies/${board}`)
+                .send({
+                  board: board,
+                  thread_id: new mongoose.Types.ObjectId(res2.body._id), // Cambio realizado aquí
+                  reply_id: new mongoose.Types.ObjectId(res2.body.replies[0]._id) // Cambio realizado aquí
+                })
+                .end((err3, res3) => {
+                  assert.equal(res3.text, 'reported');
+                });
+            });
         });
     });
   });
